@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import './ParkingLot.css';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 import { ref, onValue, set } from 'firebase/database';
+import { signOut } from 'firebase/auth'; // ✅ for logout
+import { useNavigate } from 'react-router-dom'; // ✅ to redirect after logout
 
 const totalSpots = 10;
 
 export default function ParkingLot() {
   const [spots, setSpots] = useState(Array(totalSpots).fill({ occupied: false, timestamp: null }));
   const [elapsedTimes, setElapsedTimes] = useState(Array(totalSpots).fill(null));
-  const [assignMessage, setAssignMessage] = useState(null); // 🔔 NEW
+  const [assignMessage, setAssignMessage] = useState(null);
+  const navigate = useNavigate(); // 🔁 redirect hook
 
   // 🔄 Sync from Firebase
   useEffect(() => {
@@ -21,7 +24,7 @@ export default function ParkingLot() {
     });
   }, []);
 
-  // ⏱️ Update timers every second
+  // ⏱️ Timer logic
   useEffect(() => {
     const interval = setInterval(() => {
       const newElapsed = spots.map((spot) => {
@@ -38,25 +41,22 @@ export default function ParkingLot() {
     return () => clearInterval(interval);
   }, [spots]);
 
-  // 🅿️ Simulate Entry + Assign Spot with Message
+  // 🅿️ Entry Handler
   const handleEnter = () => {
     const index = spots.findIndex((spot) => !spot.occupied);
     if (index !== -1) {
       const newSpots = [...spots];
       newSpots[index] = { occupied: true, timestamp: Date.now() };
       set(ref(db, 'spots'), newSpots);
-
-      // ✨ Show assignment message (Lane based on spot number)
       const lane = Math.floor(index / 5) + 1;
-      const spotNum = (index % 5) + 1;
       setAssignMessage(`✅ Assigned to Spot ${index + 1} (Lane ${lane})`);
-      setTimeout(() => setAssignMessage(null), 5000); // auto-hide after 5 sec
+      setTimeout(() => setAssignMessage(null), 5000);
     } else {
       alert('🚫 No spots available!');
     }
   };
 
-  // 🚪 Simulate Exit
+  // 🚪 Exit Handler
   const handleLeave = () => {
     const index = spots.map((s) => s.occupied).lastIndexOf(true);
     if (index !== -1) {
@@ -68,7 +68,7 @@ export default function ParkingLot() {
     }
   };
 
-  // 🔄 Reset Lot
+  // 🧼 Reset
   const handleReset = () => {
     const resetSpots = Array(totalSpots).fill({ occupied: false, timestamp: null });
     set(ref(db, 'spots'), resetSpots);
@@ -76,14 +76,22 @@ export default function ParkingLot() {
     setTimeout(() => setAssignMessage(null), 3000);
   };
 
+  // 🔒 Logout Handler
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigate('/'); // Redirect to login
+    } catch (error) {
+      console.error('Logout Error:', error.message);
+    }
+  };
+
   return (
     <div className="parking-container">
       <h2>🚗 ParkGenius: Smart Parking</h2>
 
-      {/* 🎉 Notification Banner */}
-      {assignMessage && (
-        <div className="notification">{assignMessage}</div>
-      )}
+      {/* 🔔 Notification */}
+      {assignMessage && <div className="notification">{assignMessage}</div>}
 
       <div className="grid">
         {spots.map((spot, i) => (
@@ -92,9 +100,7 @@ export default function ParkingLot() {
             className={`spot ${spot.occupied ? 'occupied' : 'available'}`}
           >
             {spot.occupied ? '🟥' : '🟩'} Spot {i + 1}
-            {spot.occupied && (
-              <div className="timer">⏱ {elapsedTimes[i]}</div>
-            )}
+            {spot.occupied && <div className="timer">⏱ {elapsedTimes[i]}</div>}
           </div>
         ))}
       </div>
@@ -102,8 +108,11 @@ export default function ParkingLot() {
       <div className="controls">
         <button onClick={handleEnter}>Simulate Entry</button>
         <button onClick={handleLeave}>Simulate Exit</button>
-        <button onClick={handleReset} style={{ backgroundColor: '#333', color: '#fff' }}>
+        <button onClick={handleReset} style={{ backgroundColor: '#555', color: '#fff' }}>
           Reset All
+        </button>
+        <button onClick={handleLogout} style={{ backgroundColor: '#ff5555', color: '#fff' }}>
+          🔓 Logout
         </button>
       </div>
     </div>
